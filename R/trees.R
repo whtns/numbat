@@ -27,7 +27,7 @@ score_tree = function(tree, P, get_l_matrix = FALSE) {
     logQ = CgetQ(logQ, children_dict, node_order)
 
     if (get_l_matrix) {
-        l_matrix = sweep(logQ, 2, colSums(logP_0), FUN = '+')
+        l_matrix = sweep(logQ, 2, Matrix::colSums(logP_0), FUN = '+')
         l_tree = sum(apply(l_matrix, 2, max))
     } else {
         l_matrix = NULL

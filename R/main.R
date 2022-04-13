@@ -104,7 +104,7 @@ run_numbat = function(
     count_mat = count_mat[genes_annotated,,drop=FALSE]
     lambdas_ref = lambdas_ref[genes_annotated,,drop=FALSE]
 
-    zero_cov = names(which(colSums(count_mat) == 0))
+    zero_cov = names(which(Matrix::colSums(count_mat) == 0))
     if (length(zero_cov) > 0) {
         log_message(glue('Filtering out {length(zero_cov)} cells with 0 coverage'))
         count_mat = count_mat[,!colnames(count_mat) %in% zero_cov]
@@ -271,13 +271,17 @@ run_numbat = function(
         log_message('Evaluating CNV per cell ..', verbose = verbose)
         log_mem()
 
-        exp_post_res = get_exp_post(
-            segs_consensus %>% mutate(cnv_state = ifelse(cnv_state == 'neu', cnv_state, cnv_state_post)),
-            count_mat,
-            lambdas_ref,
-            use_loh = use_loh,
-            gtf = gtf,
-            ncores = ncores)
+        exp_post_res = 
+            segs_consensus %>% 
+            mutate(cnv_state = ifelse(cnv_state == 'neu', cnv_state, cnv_state_post))
+        
+        exp_post_res = 
+            get_exp_post(exp_post_res, 
+                         count_mat,
+                         lambdas_ref,
+                         use_loh = use_loh,
+                         gtf = gtf,
+                         ncores = ncores)
 
         exp_post = exp_post_res$exp_post
         exp_sc = exp_post_res$exp_sc
@@ -798,9 +802,9 @@ get_clone_post = function(gtree, exp_post, allele_post) {
         filter(compartment == 'tumor') %>%
         pull(clone)
 
-    clone_post['p_cnv'] = clone_post[paste0('p_', tumor_clones)] %>% rowSums
-    clone_post['p_cnv_x'] = clone_post[paste0('p_x_', tumor_clones)] %>% rowSums
-    clone_post['p_cnv_y'] = clone_post[paste0('p_y_', tumor_clones)] %>% rowSums
+    clone_post['p_cnv'] = clone_post[paste0('p_', tumor_clones)] %>% Matrix::rowSums
+    clone_post['p_cnv_x'] = clone_post[paste0('p_x_', tumor_clones)] %>% Matrix::rowSums
+    clone_post['p_cnv_y'] = clone_post[paste0('p_y_', tumor_clones)] %>% Matrix::rowSums
 
     clone_post = clone_post %>% mutate(compartment_opt = ifelse(p_cnv > 0.5, 'tumor', 'normal'))
     
@@ -950,7 +954,7 @@ get_exp_sc = function(segs_consensus, count_mat, gtf) {
         ) %>%
         mutate(CHROM = as.factor(CHROM)) %>%
         left_join(
-            segs_consensus %>% mutate(seg_index = 1:n()),
+            segs_consensus %>% mutate(CHROM = as.factor(CHROM), seg_index = 1:n()),
             by = c('seg_index', 'CHROM')
         ) %>%
         distinct(gene, `.keep_all` = TRUE) 

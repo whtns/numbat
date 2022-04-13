@@ -25,7 +25,7 @@ choose_ref_cor = function(count_mat, lambdas_ref, gtf) {
     
     exp_mat = scale_counts(count_mat)
     # keep highly expressed genes in at least one of the references
-    exp_mat = exp_mat[rowSums(lambdas_ref * 1e6 > 2) > 0,,drop=FALSE]
+    exp_mat = exp_mat[Matrix::rowSums(lambdas_ref * 1e6 > 2) > 0,,drop=FALSE]
     
     cors = cor(as.matrix(log(exp_mat * 1e6 + 1)), log(lambdas_ref * 1e6 + 1)[rownames(exp_mat),])
     best_refs = apply(cors, 1, function(x) {colnames(cors)[which.max(x)]})
@@ -34,7 +34,7 @@ choose_ref_cor = function(count_mat, lambdas_ref, gtf) {
 }
 
 scale_counts = function(count_mat) {
-    count_mat@x <- count_mat@x/rep.int(colSums(count_mat), diff(count_mat@p))
+    count_mat@x <- count_mat@x/rep.int(Matrix::colSums(count_mat), diff(count_mat@p))
     return(count_mat)
 }
 
@@ -63,12 +63,12 @@ aggregate_counts = function(count_mat, cell_annot, verbose = T) {
     }
     
     if (length(levels(cell_dict)) == 1) {
-        count_mat_clust = count_mat %>% rowSums() %>% as.matrix %>% magrittr::set_colnames(levels(cell_dict))
+        count_mat_clust = count_mat %>% Matrix::rowSums() %>% as.matrix %>% magrittr::set_colnames(levels(cell_dict))
         exp_mat_clust = count_mat_clust/sum(count_mat_clust)
     } else {
         M = model.matrix(~ 0 + cell_dict) %>% magrittr::set_colnames(levels(cell_dict))
         count_mat_clust = count_mat %*% M
-        exp_mat_clust = count_mat_clust %*% diag(1/colSums(count_mat_clust)) %>% magrittr::set_colnames(colnames(count_mat_clust))
+        exp_mat_clust = count_mat_clust %*% diag(1/Matrix::colSums(count_mat_clust)) %>% magrittr::set_colnames(colnames(count_mat_clust))
     }    
     
     return(list('exp_mat' = as.matrix(exp_mat_clust), 'count_mat' = as.matrix(count_mat_clust)))
@@ -178,7 +178,7 @@ filter_genes = function(count_mat, lambdas_ref, gtf, verbose = T) {
 
     count_mat = count_mat[genes_keep,,drop=FALSE]
     lambdas_ref = lambdas_ref[genes_keep]
-    lambdas_obs = rowSums(count_mat)/sum(count_mat)
+    lambdas_obs = Matrix::rowSums(count_mat)/sum(count_mat)
 
     min_both = 2
 
@@ -211,7 +211,7 @@ get_exp_bulk = function(count_mat, lambdas_ref, gtf, verbose = TRUE) {
     lambdas_ref = lambdas_ref[mut_expressed]
 
     bulk_obs = count_mat %>%
-        rowSums() %>%
+        Matrix::rowSums() %>%
         data.frame() %>%
         setNames('Y_obs') %>%
         tibble::rownames_to_column('gene') %>%
@@ -356,7 +356,7 @@ get_bulk = function(count_mat, lambdas_ref, df_allele, gtf, genetic_map, min_dep
 
     count_mat = check_matrix(count_mat)
 
-    fit = fit_ref_sse(rowSums(count_mat), lambdas_ref, gtf)
+    fit = fit_ref_sse(Matrix::rowSums(count_mat), lambdas_ref, gtf)
 
     exp_bulk = get_exp_bulk(
             count_mat,
@@ -1594,8 +1594,8 @@ calc_cluster_dist = function(count_mat, cell_annot) {
     M = model.matrix(~ 0 + cell_dict) %>% set_colnames(levels(cell_dict))
 
     count_mat_clust = count_mat %*% M
-    count_mat_clust = count_mat_clust[rowSums(count_mat_clust) > 0,]
-    exp_mat_clust = count_mat_clust %*% diag(1/colSums(count_mat_clust)) %>% set_colnames(colnames(count_mat_clust))
+    count_mat_clust = count_mat_clust[Matrix::rowSums(count_mat_clust) > 0,]
+    exp_mat_clust = count_mat_clust %*% diag(1/Matrix::colSums(count_mat_clust)) %>% set_colnames(colnames(count_mat_clust))
     exp_mat_clust = log10(exp_mat_clust * 1e6 + 1)
 
     dist_mat = 1-cor(exp_mat_clust)
