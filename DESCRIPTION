@@ -29,7 +29,7 @@ Imports:
     magrittr,
     Matrix,
     future,
-    future.lapply,
+    future.apply,
     parallelDist,
     patchwork,
     purrr,
