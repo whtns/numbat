@@ -1029,9 +1029,8 @@ find_common_diploid = function(
     }
     
     # define balanced regions in each sample
-    bulks = mclapply(
+    bulks = future.apply::future_lapply(
         bulks %>% split(.$sample),
-        mc.cores = ncores,
         function(bulk) {
             
             bulk %>% 
