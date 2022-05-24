@@ -65,7 +65,8 @@ perform_nni = function(tree_init, P, max_iter = 100, eps = 0.01, ncores = 1, ver
         
         ptm = proc.time()
 
-        neighbours = nni(tree_current, ncores = ncores)
+        # neighbours = phangorn::nni(tree_current, ncores = ncores)
+        neighbours = phangorn::nni(tree_current)
 
         scores = mclapply(
                 mc.cores = ncores,
