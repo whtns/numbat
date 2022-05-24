@@ -4,7 +4,7 @@
 #' @importFrom data.table fread fwrite as.data.table
 #' @import stringr
 #' @import glue
-#' @importFrom parallel mclapply
+#' @importFrom future.apply future_lapply
 #' @import tidygraph
 #' @import ggplot2
 #' @import ggtree
@@ -564,9 +564,8 @@ make_group_bulks = function(groups, count_mat, df_allele, lambdas_ref, gtf, gene
 
     ncores = ifelse(is.null(ncores), length(groups), ncores)
 
-    results = mclapply(
+    results = future.apply::future_lapply(
             groups,
-            mc.cores = ncores,
             function(g) {
                 get_bulk(
                     count_mat = count_mat[,g$cells],
@@ -632,9 +631,8 @@ run_group_hmms = function(
         find_diploid = TRUE
     }
 
-    results = mclapply(
+    results = future.apply::future_lapply(
         bulks %>% split(.$sample),
-        mc.cores = ncores,
         function(bulk) {
             bulk %>% analyze_bulk(
                 t = t,
@@ -1057,9 +1055,8 @@ get_exp_post = function(segs_consensus, count_mat, gtf, lambdas_ref, sc_refs = N
         sc_refs = choose_ref_cor(count_mat, lambdas_ref, gtf)
     }
 
-    results = mclapply(
+    results = future.apply::future_lapply(
         cells,
-        mc.cores = ncores,
         function(cell) {
    
             ref = sc_refs[cell]

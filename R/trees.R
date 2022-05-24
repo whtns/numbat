@@ -68,8 +68,7 @@ perform_nni = function(tree_init, P, max_iter = 100, eps = 0.01, ncores = 1, ver
         # neighbours = phangorn::nni(tree_current, ncores = ncores)
         neighbours = phangorn::nni(tree_current)
 
-        scores = mclapply(
-                mc.cores = ncores,
+        scores = future.apply::future_lapply(
                 neighbours,
                 function(tree) {
                     score_tree(tree, P)$l_tree
@@ -147,8 +146,7 @@ nni <- function(tree, ncores = 1) {
   result <- vector("list", 2 * n)
   l <- 1
   
-  result = mclapply(
-          mc.cores = ncores,
+  result = future.apply::future_lapply(
           seq(1,n),
           function(i) {
                nnin(tree, i)
