@@ -34,6 +34,11 @@ score_tree = function(tree, P, get_l_matrix = FALSE) {
         l_tree = sum(apply(logQ, 2, max)) + sum(logP_0)
     }
     
+    remove_items <- ls()[!ls() %in% c("l_tree", "logQ", "l_matrix")]
+    
+    rm(remove_items)
+    gc()
+    
     return(list('l_tree' = l_tree, 'logQ' = logQ, 'l_matrix' = l_matrix))
     
 }
@@ -56,7 +61,7 @@ perform_nni = function(tree_init, P, max_iter = 100, eps = 0.01, ncores = 1, ver
     i = 1
     max_current = score_tree(tree_init, P)$l_tree
     tree_current = tree_init
-    tree_list = list()
+    tree_list <- vector(mode = "list", length = 2)
     tree_list[[1]] = tree_current
 
     while (!converge & i <= max_iter) {
@@ -65,19 +70,24 @@ perform_nni = function(tree_init, P, max_iter = 100, eps = 0.01, ncores = 1, ver
         
         ptm = proc.time()
 
-        # neighbours = phangorn::nni(tree_current, ncores = ncores)
-        neighbours = phangorn::nni(tree_current)
+        # neighbors = phangorn::nni(tree_current, ncores = ncores)
+        neighbors = phangorn::nni(tree_current)
+        scores = vector(length = length(neighbors))
+        for (i in seq_along(neighbors)){
+        	scores[[i]] = score_tree(neighbors[[i]], P)$l_tree
+        }
 
-        scores = future.apply::future_lapply(
-                neighbours,
-                function(tree) {
-                    score_tree(tree, P)$l_tree
-                }
-            ) %>%
-            unlist()
+        # scores = furrr::future_map_dbl(
+        #         neighbors,
+        #         function(tree, P) {
+        #             score_tree(tree, P)$l_tree
+        #         },
+        #          P,
+        #         future.seed = TRUE
+        #     )
 
         if (max(scores) > max_current + eps) {
-            tree_list[[i]] = tree_current = neighbours[[which.max(scores)]]
+            tree_list[[i]] = tree_current = neighbors[[which.max(scores)]]
             tree_list[[i]]$likelihood = max_current = max(scores)
             converge = FALSE
         } else {

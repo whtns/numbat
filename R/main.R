@@ -564,23 +564,45 @@ make_group_bulks = function(groups, count_mat, df_allele, lambdas_ref, gtf, gene
 
     ncores = ifelse(is.null(ncores), length(groups), ncores)
 
-    results = future.apply::future_lapply(
-            groups,
-            function(g) {
-                get_bulk(
-                    count_mat = count_mat[,g$cells],
-                    df_allele = df_allele %>% filter(cell %in% g$cells),
-                    lambdas_ref = lambdas_ref,
-                    gtf = gtf,
-                    genetic_map = genetic_map,
-                    min_depth = min_depth
-                ) %>%
-                mutate(
-                    n_cells = g$size,
-                    members = paste0(g$members, collapse = ';'),
-                    sample = g$sample
-                )
-        })
+    get_results <- function(g){
+    	get_bulk(
+    		count_mat = count_mat[,g$cells],
+    		df_allele = df_allele %>% filter(cell %in% g$cells),
+    		lambdas_ref = lambdas_ref,
+    		gtf = gtf,
+    		genetic_map = genetic_map,
+    		min_depth = min_depth
+    	) %>%
+    		mutate(
+    			n_cells = g$size,
+    			members = paste0(g$members, collapse = ';'),
+    			sample = g$sample
+    		)
+    }
+    
+    results = vector(mode = "list", length = length(groups))
+    for (i in seq_along(groups)){
+    	results[[i]] = get_results(groups[[i]])
+    }
+    
+    
+    # results = future.apply::future_lapply(
+    #         groups,
+    #         function(g) {
+    #             get_bulk(
+    #                 count_mat = count_mat[,g$cells],
+    #                 df_allele = df_allele %>% filter(cell %in% g$cells),
+    #                 lambdas_ref = lambdas_ref,
+    #                 gtf = gtf,
+    #                 genetic_map = genetic_map,
+    #                 min_depth = min_depth
+    #             ) %>%
+    #             mutate(
+    #                 n_cells = g$size,
+    #                 members = paste0(g$members, collapse = ';'),
+    #                 sample = g$sample
+    #             )
+    #     })
 
     bad = sapply(results, inherits, what = "try-error")
 
@@ -631,20 +653,41 @@ run_group_hmms = function(
         find_diploid = TRUE
     }
 
-    results = future.apply::future_lapply(
-        bulks %>% split(.$sample),
-        function(bulk) {
-            bulk %>% analyze_bulk(
-                t = t,
-                gamma = gamma, 
-                find_diploid = find_diploid, 
-                run_hmm = run_hmm,
-                allele_only = allele_only, 
-                diploid_chroms = diploid_chroms,
-                min_genes = min_genes,
-                retest = retest, 
-                verbose = verbose)
-    })
+    get_bulks <- function(bulk){
+    	bulk %>% analyze_bulk(
+    		t = t,
+    		gamma = gamma, 
+    		find_diploid = find_diploid, 
+    		run_hmm = run_hmm,
+    		allele_only = allele_only, 
+    		diploid_chroms = diploid_chroms,
+    		min_genes = min_genes,
+    		retest = retest, 
+    		verbose = verbose)
+    }
+
+    splits <- split(bulks$sample)
+    
+    bulks = vector(mode = "list", length = lenght(splits))
+        
+    for(i in seq_along(splits)){
+    	bulks[[i]] = get_bulks(splits[[i]])
+    }
+    
+    # results = future.apply::future_lapply(
+    #     bulks %>% split(.$sample),
+    #     function(bulk) {
+    #         bulk %>% analyze_bulk(
+    #             t = t,
+    #             gamma = gamma, 
+    #             find_diploid = find_diploid, 
+    #             run_hmm = run_hmm,
+    #             allele_only = allele_only, 
+    #             diploid_chroms = diploid_chroms,
+    #             min_genes = min_genes,
+    #             retest = retest, 
+    #             verbose = verbose)
+    # })
                 
     bad = sapply(results, inherits, what = "try-error")
 
@@ -1054,30 +1097,56 @@ get_exp_post = function(segs_consensus, count_mat, gtf, lambdas_ref, sc_refs = N
     if (is.null(sc_refs)) {
         sc_refs = choose_ref_cor(count_mat, lambdas_ref, gtf)
     }
-
-    results = future.apply::future_lapply(
-        cells,
-        function(cell) {
-   
-            ref = sc_refs[cell]
-
-            exp_sc = exp_sc[,c('gene', 'seg', 'CHROM', 'cnv_state', 'seg_start', 'seg_end', cell)] %>%
-                rename(Y_obs = ncol(.))
-
-            exp_sc %>%
-                mutate(
-                    lambda_ref = lambdas_ref[, ref][gene],
-                    lambda_obs = Y_obs/sum(Y_obs),
-                    logFC = log2(lambda_obs/lambda_ref)
-                ) %>%
-                get_exp_likelihoods(
-                    use_loh = use_loh,
-                    diploid_chroms = diploid_chroms
-                ) %>%
-                mutate(cell = cell, ref = ref)
-
-        }
-    )
+    
+    get_result <- function(cell){
+    	
+    	ref = sc_refs[cell]
+    	
+    	exp_sc = exp_sc[,c('gene', 'seg', 'CHROM', 'cnv_state', 'seg_start', 'seg_end', cell)] %>%
+    		rename(Y_obs = ncol(.))
+    	
+    	exp_sc %>%
+    		mutate(
+    			lambda_ref = lambdas_ref[, ref][gene],
+    			lambda_obs = Y_obs/sum(Y_obs),
+    			logFC = log2(lambda_obs/lambda_ref)
+    		) %>%
+    		get_exp_likelihoods(
+    			use_loh = use_loh,
+    			diploid_chroms = diploid_chroms
+    		) %>%
+    		mutate(cell = cell, ref = ref)
+    	
+    }
+    
+    results = vector(mode = "list", length = lenght(cells))
+    for (i in seq_along(cells)){
+    	results[[i]] = get_result(cells[[i]])
+    }
+    
+    # results = future.apply::future_lapply(
+    #     cells,
+    #     function(cell) {
+    # 
+    #         ref = sc_refs[cell]
+    # 
+    #         exp_sc = exp_sc[,c('gene', 'seg', 'CHROM', 'cnv_state', 'seg_start', 'seg_end', cell)] %>%
+    #             rename(Y_obs = ncol(.))
+    # 
+    #         exp_sc %>%
+    #             mutate(
+    #                 lambda_ref = lambdas_ref[, ref][gene],
+    #                 lambda_obs = Y_obs/sum(Y_obs),
+    #                 logFC = log2(lambda_obs/lambda_ref)
+    #             ) %>%
+    #             get_exp_likelihoods(
+    #                 use_loh = use_loh,
+    #                 diploid_chroms = diploid_chroms
+    #             ) %>%
+    #             mutate(cell = cell, ref = ref)
+    # 
+    #     }
+    # )
 
     bad = sapply(results, inherits, what = "try-error")
 
