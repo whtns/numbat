@@ -668,7 +668,7 @@ run_group_hmms = function(
 
     splits <- split(bulks$sample)
     
-    bulks = vector(mode = "list", length = lenght(splits))
+    bulks = vector(mode = "list", length = length(splits))
         
     for(i in seq_along(splits)){
     	bulks[[i]] = get_bulks(splits[[i]])
@@ -1119,7 +1119,7 @@ get_exp_post = function(segs_consensus, count_mat, gtf, lambdas_ref, sc_refs = N
     	
     }
     
-    results = vector(mode = "list", length = lenght(cells))
+    results = vector(mode = "list", length = length(cells))
     for (i in seq_along(cells)){
     	results[[i]] = get_result(cells[[i]])
     }

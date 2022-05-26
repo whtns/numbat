@@ -42,7 +42,8 @@ Imports:
     tidygraph,
     tidyr,
     vcfR,
-    zoo
+    zoo,
+    dtplyr
 Suggests: 
     matrixStats,
     testthat (>= 3.0.0)
