@@ -5,6 +5,7 @@
 #' @import stringr
 #' @import glue
 #' @import tidygraph
+#' @importFrom parallel mclapply
 #' @import ggplot2
 #' @import ggtree
 #' @import ggraph
