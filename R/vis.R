@@ -506,6 +506,7 @@ plot_psbulk = function(
     }
 
     D = bulk %>% 
+    	tibble::as_tibble() %>% 
         mutate(logFC = ifelse(logFC > exp_limit | logFC < -exp_limit, NA, logFC)) %>%
         mutate(pBAF = ifelse(DP >= min_depth, pBAF, NA)) %>%
         mutate(pHF = pBAF) %>%
@@ -558,7 +559,8 @@ plot_psbulk = function(
         segs = bulk %>% 
             distinct(CHROM, seg, seg_start, seg_start_index, seg_end, seg_end_index, phi_mle) %>%
             mutate(variable = 'logFC') %>%
-            filter(log2(phi_mle) < exp_limit)
+            filter(log2(phi_mle) < exp_limit) %>% 
+        	tibble::as_tibble()
 
         if (use_pos) {
             start = 'seg_start'
@@ -1222,7 +1224,7 @@ plot_phylo_heatmap = function(
     # plot CNVs
     p_segs = ggplot(
             joint_post %>% mutate(
-                cnv_state = ifelse(cnv_state == 'neu', NA, cnv_state),
+                cnv_state = ifelse(cnv_state == 'neu', "NA", cnv_state),
                 logBF = pmax(pmin(logBF, logBF_max), logBF_min),
                 p_cnv = pmax(p_cnv, p_min),
             )

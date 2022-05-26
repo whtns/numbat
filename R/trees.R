@@ -77,15 +77,6 @@ perform_nni = function(tree_init, P, max_iter = 100, eps = 0.01, ncores = 1, ver
         	scores[[i]] = score_tree(neighbors[[i]], P)$l_tree
         }
 
-        # scores = furrr::future_map_dbl(
-        #         neighbors,
-        #         function(tree, P) {
-        #             score_tree(tree, P)$l_tree
-        #         },
-        #          P,
-        #         future.seed = TRUE
-        #     )
-
         if (max(scores) > max_current + eps) {
             tree_list[[i]] = tree_current = neighbors[[which.max(scores)]]
             tree_list[[i]]$likelihood = max_current = max(scores)
@@ -156,7 +147,8 @@ nni <- function(tree, ncores = 1) {
   result <- vector("list", 2 * n)
   l <- 1
   
-  result = future.apply::future_lapply(
+  result = mclapply(
+  	mc.cores = ncores,
           seq(1,n),
           function(i) {
                nnin(tree, i)

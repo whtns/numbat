@@ -28,8 +28,6 @@ Imports:
     logger,
     magrittr,
     Matrix,
-    future,
-    future.apply,
     parallelDist,
     patchwork,
     purrr,

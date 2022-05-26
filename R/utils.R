@@ -229,8 +229,10 @@ get_exp_bulk = function(count_mat, lambdas_ref, gtf, verbose = TRUE) {
         mutate(
             logFC = log2(lambda_obs) - log2(lambda_ref),
             lnFC = log(lambda_obs) - log(lambda_ref),
-            logFC = ifelse(is.infinite(logFC), NA, logFC),
-            lnFC = ifelse(is.infinite(lnFC), NA, lnFC)
+            logFC = ifelse(is.infinite(logFC), "NA", as.character(logFC)),
+            lnFC = ifelse(is.infinite(lnFC), "NA", as.character(lnFC)),
+            logFC = as.numeric(logFC),
+            lnFC = as.numeric(lnFC)
         )
     
     return(bulk_obs)
@@ -316,8 +318,10 @@ combine_bulk = function(allele_bulk, exp_bulk) {
         ) %>%
         mutate_at(
             c('logFC', 'lnFC'),
-            function(x) ifelse(is.infinite(x), NA, x)
-        )
+            function(x) ifelse(is.infinite(x), "NA", as.character(x))
+        ) %>% 
+    	dplyr::mutate(logFC = as.numeric(logFC), 
+    								lnFC = as.numeric(lnFC))
     
     return(bulk)
     
@@ -956,7 +960,7 @@ annot_haplo_segs = function(bulk) {
 smooth_segs = function(bulk, min_genes = 10) {
     bulk %>% group_by(seg) %>%
         mutate(
-            cnv_state = ifelse(n_genes <= min_genes, NA, cnv_state)
+            cnv_state = ifelse(n_genes <= min_genes, "NA", cnv_state)
         ) %>%
         ungroup() %>%
         group_by(CHROM) %>%
@@ -1027,63 +1031,33 @@ find_common_diploid = function(
     if (!'sample' %in% colnames(bulks)) {
         bulks$sample = '1'
     }
-    
-	get_bulks <- function(bulk) {
-		
-		bulk %>% 
-			group_by(CHROM) %>%
-			mutate(state = 
-						 	run_hmm_inhom(
-						 		pAD = pAD,
-						 		DP = DP, 
-						 		p_s = p_s,
-						 		t = t,
-						 		theta_min = theta_min,
-						 		gamma = gamma
-						 	)
-			) %>% ungroup() %>%
-			mutate(cnv_state = str_remove(state, '_down|_up')) %>%
-			annot_segs() %>%
-			smooth_segs(min_genes = min_genes) %>%
-			annot_segs()
-		
-	}
 	
-	splits <- split(bulks$sample)
 	
-	bulks = vector(mode = "list", length = length(splits))
-	
-	for(i in seq_along(splits)){
-		bulks[[i]] = get_bulks(splits[[i]])
-	}
-	
-	bulks = bulks %>% 
-		bind_rows()
-	
-    # # define balanced regions in each sample
-    # bulks = future.apply::future_lapply(
-    #     bulks %>% split(.$sample),
-    #     function(bulk) {
-    #         
-    #         bulk %>% 
-    #             group_by(CHROM) %>%
-    #             mutate(state = 
-    #                 run_hmm_inhom(
-    #                     pAD = pAD,
-    #                     DP = DP, 
-    #                     p_s = p_s,
-    #                     t = t,
-    #                     theta_min = theta_min,
-    #                     gamma = gamma
-    #                 )
-    #             ) %>% ungroup() %>%
-    #             mutate(cnv_state = str_remove(state, '_down|_up')) %>%
-    #             annot_segs() %>%
-    #             smooth_segs(min_genes = min_genes) %>%
-    #             annot_segs()
-    # 
-    #     }) %>%
-    #     bind_rows()
+    # define balanced regions in each sample
+    bulks = mclapply(
+    	mc.cores = ncores,
+        bulks %>% split(.$sample),
+        function(bulk) {
+
+            bulk %>%
+                group_by(CHROM) %>%
+                mutate(state =
+                    run_hmm_inhom(
+                        pAD = pAD,
+                        DP = DP,
+                        p_s = p_s,
+                        t = t,
+                        theta_min = theta_min,
+                        gamma = gamma
+                    )
+                ) %>% ungroup() %>%
+                mutate(cnv_state = str_remove(state, '_down|_up')) %>%
+                annot_segs() %>%
+                smooth_segs(min_genes = min_genes) %>%
+                annot_segs()
+
+        }) %>%
+        bind_rows()
 
     # unionize imbalanced segs
     segs_imbal = bulks %>% 

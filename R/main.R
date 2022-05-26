@@ -4,7 +4,6 @@
 #' @importFrom data.table fread fwrite as.data.table
 #' @import stringr
 #' @import glue
-#' @importFrom future.apply future_lapply
 #' @import tidygraph
 #' @import ggplot2
 #' @import ggtree
@@ -563,46 +562,26 @@ make_group_bulks = function(groups, count_mat, df_allele, lambdas_ref, gtf, gene
     }
 
     ncores = ifelse(is.null(ncores), length(groups), ncores)
-
-    get_results <- function(g){
-    	get_bulk(
-    		count_mat = count_mat[,g$cells],
-    		df_allele = df_allele %>% filter(cell %in% g$cells),
-    		lambdas_ref = lambdas_ref,
-    		gtf = gtf,
-    		genetic_map = genetic_map,
-    		min_depth = min_depth
-    	) %>%
-    		mutate(
-    			n_cells = g$size,
-    			members = paste0(g$members, collapse = ';'),
-    			sample = g$sample
-    		)
-    }
-    
-    results = vector(mode = "list", length = length(groups))
-    for (i in seq_along(groups)){
-    	results[[i]] = get_results(groups[[i]])
-    }
     
     
-    # results = future.apply::future_lapply(
-    #         groups,
-    #         function(g) {
-    #             get_bulk(
-    #                 count_mat = count_mat[,g$cells],
-    #                 df_allele = df_allele %>% filter(cell %in% g$cells),
-    #                 lambdas_ref = lambdas_ref,
-    #                 gtf = gtf,
-    #                 genetic_map = genetic_map,
-    #                 min_depth = min_depth
-    #             ) %>%
-    #             mutate(
-    #                 n_cells = g$size,
-    #                 members = paste0(g$members, collapse = ';'),
-    #                 sample = g$sample
-    #             )
-    #     })
+    results = mclapply(
+    	mc.cores = ncores,
+            groups,
+            function(g) {
+                get_bulk(
+                    count_mat = count_mat[,g$cells],
+                    df_allele = df_allele %>% filter(cell %in% g$cells),
+                    lambdas_ref = lambdas_ref,
+                    gtf = gtf,
+                    genetic_map = genetic_map,
+                    min_depth = min_depth
+                ) %>%
+                mutate(
+                    n_cells = g$size,
+                    members = paste0(g$members, collapse = ';'),
+                    sample = g$sample
+                )
+        })
 
     bad = sapply(results, inherits, what = "try-error")
 
@@ -652,42 +631,22 @@ run_group_hmms = function(
     } else {
         find_diploid = TRUE
     }
-
-    get_bulks <- function(bulk){
-    	bulk %>% analyze_bulk(
-    		t = t,
-    		gamma = gamma, 
-    		find_diploid = find_diploid, 
-    		run_hmm = run_hmm,
-    		allele_only = allele_only, 
-    		diploid_chroms = diploid_chroms,
-    		min_genes = min_genes,
-    		retest = retest, 
-    		verbose = verbose)
-    }
-
-    splits <- split(bulks$sample)
     
-    bulks = vector(mode = "list", length = length(splits))
-        
-    for(i in seq_along(splits)){
-    	bulks[[i]] = get_bulks(splits[[i]])
-    }
-    
-    # results = future.apply::future_lapply(
-    #     bulks %>% split(.$sample),
-    #     function(bulk) {
-    #         bulk %>% analyze_bulk(
-    #             t = t,
-    #             gamma = gamma, 
-    #             find_diploid = find_diploid, 
-    #             run_hmm = run_hmm,
-    #             allele_only = allele_only, 
-    #             diploid_chroms = diploid_chroms,
-    #             min_genes = min_genes,
-    #             retest = retest, 
-    #             verbose = verbose)
-    # })
+    results = mclapply(
+    	mc.cores = ncores,
+        bulks %>% split(.$sample),
+        function(bulk) {
+            bulk %>% analyze_bulk(
+                t = t,
+                gamma = gamma,
+                find_diploid = find_diploid,
+                run_hmm = run_hmm,
+                allele_only = allele_only,
+                diploid_chroms = diploid_chroms,
+                min_genes = min_genes,
+                retest = retest,
+                verbose = verbose)
+    })
                 
     bad = sapply(results, inherits, what = "try-error")
 
@@ -732,7 +691,8 @@ get_segs_consensus = function(bulks, min_LLR = 40, min_overlap = 0.45) {
         ungroup() %>%
         select(any_of(info_cols)) %>%
         distinct() %>%
-        mutate(cnv_state = ifelse(LLR < min_LLR | is.na(LLR), 'neu', cnv_state))
+        mutate(cnv_state = ifelse(LLR < min_LLR | is.na(LLR), 'neu', cnv_state)) %>% 
+    	tibble::as_tibble()
     
     if (all(segs_all$cnv_state == 'neu')){
         stop('No CNV remains after filtering')
@@ -1039,12 +999,14 @@ get_exp_sc = function(segs_consensus, count_mat, gtf) {
         setNames(c('gene_index', 'seg_index')) %>%
         left_join(
             gtf %>% mutate(gene_index = 1:n()),
-            by = c('gene_index')
+            by = c('gene_index'),
+            copy = TRUE
         ) %>%
         mutate(CHROM = as.factor(CHROM)) %>%
         left_join(
             segs_consensus %>% mutate(CHROM = as.factor(CHROM), seg_index = 1:n()),
-            by = c('seg_index', 'CHROM')
+            by = c('seg_index', 'CHROM'),
+            copy = TRUE
         ) %>%
         distinct(gene, `.keep_all` = TRUE) 
 
@@ -1098,55 +1060,30 @@ get_exp_post = function(segs_consensus, count_mat, gtf, lambdas_ref, sc_refs = N
         sc_refs = choose_ref_cor(count_mat, lambdas_ref, gtf)
     }
     
-    get_result <- function(cell){
-    	
-    	ref = sc_refs[cell]
-    	
-    	exp_sc = exp_sc[,c('gene', 'seg', 'CHROM', 'cnv_state', 'seg_start', 'seg_end', cell)] %>%
-    		rename(Y_obs = ncol(.))
-    	
-    	exp_sc %>%
-    		mutate(
-    			lambda_ref = lambdas_ref[, ref][gene],
-    			lambda_obs = Y_obs/sum(Y_obs),
-    			logFC = log2(lambda_obs/lambda_ref)
-    		) %>%
-    		get_exp_likelihoods(
-    			use_loh = use_loh,
-    			diploid_chroms = diploid_chroms
-    		) %>%
-    		mutate(cell = cell, ref = ref)
-    	
-    }
-    
-    results = vector(mode = "list", length = length(cells))
-    for (i in seq_along(cells)){
-    	results[[i]] = get_result(cells[[i]])
-    }
-    
-    # results = future.apply::future_lapply(
-    #     cells,
-    #     function(cell) {
-    # 
-    #         ref = sc_refs[cell]
-    # 
-    #         exp_sc = exp_sc[,c('gene', 'seg', 'CHROM', 'cnv_state', 'seg_start', 'seg_end', cell)] %>%
-    #             rename(Y_obs = ncol(.))
-    # 
-    #         exp_sc %>%
-    #             mutate(
-    #                 lambda_ref = lambdas_ref[, ref][gene],
-    #                 lambda_obs = Y_obs/sum(Y_obs),
-    #                 logFC = log2(lambda_obs/lambda_ref)
-    #             ) %>%
-    #             get_exp_likelihoods(
-    #                 use_loh = use_loh,
-    #                 diploid_chroms = diploid_chroms
-    #             ) %>%
-    #             mutate(cell = cell, ref = ref)
-    # 
-    #     }
-    # )
+    results = mclapply(
+    	mc.cores = ncores,
+        cells,
+        function(cell) {
+
+            ref = sc_refs[cell]
+
+            exp_sc = exp_sc[,c('gene', 'seg', 'CHROM', 'cnv_state', 'seg_start', 'seg_end', cell)] %>%
+                rename(Y_obs = ncol(.))
+
+            exp_sc %>%
+                mutate(
+                    lambda_ref = lambdas_ref[, ref][gene],
+                    lambda_obs = Y_obs/sum(Y_obs),
+                    logFC = log2(lambda_obs/lambda_ref)
+                ) %>%
+                get_exp_likelihoods(
+                    use_loh = use_loh,
+                    diploid_chroms = diploid_chroms
+                ) %>%
+                mutate(cell = cell, ref = ref)
+
+        }
+    )
 
     bad = sapply(results, inherits, what = "try-error")
 
@@ -1255,7 +1192,8 @@ get_allele_post = function(bulk_all, segs_consensus, df_allele, naive = FALSE) {
         arrange(cell, CHROM, POS) %>%
         mutate(
             n_chrom_snp = n(),
-            inter_snp_dist = ifelse(n_chrom_snp > 1, c(NA, POS[2:length(POS)] - POS[1:(length(POS)-1)]), NA)
+            inter_snp_dist = ifelse(n_chrom_snp > 1, c("NA", as.character(POS[2:length(POS)] - POS[1:(length(POS)-1)])), "NA"),
+            inter_snp_dist = as.numeric(inter_snp_dist) 
         ) %>%
         ungroup() %>%
         filter(inter_snp_dist > 250 | is.na(inter_snp_dist))
