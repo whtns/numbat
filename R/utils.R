@@ -1033,31 +1033,39 @@ find_common_diploid = function(
     }
 	
 	
+	splits <- bulks %>% 
+		split(.$sample)
+	
+	define_balanced_regions <- function(splits){
+		p <- progressor(along = names(splits))
+		bulks = future.apply::future_lapply(
+			splits,
+			function(bulk) {
+				p(sprintf("bulk=%s", bulk))
+				
+				bulk %>%
+					group_by(CHROM) %>%
+					mutate(state =
+								 	run_hmm_inhom(
+								 		pAD = pAD,
+								 		DP = DP,
+								 		p_s = p_s,
+								 		t = t,
+								 		theta_min = theta_min,
+								 		gamma = gamma
+								 	)
+					) %>% ungroup() %>%
+					mutate(cnv_state = str_remove(state, '_down|_up')) %>%
+					annot_segs() %>%
+					smooth_segs(min_genes = min_genes) %>%
+					annot_segs()
+				
+			}) %>%
+			bind_rows()
+	}
+	
     # define balanced regions in each sample
-    bulks = mclapply(
-    	mc.cores = ncores,
-        bulks %>% split(.$sample),
-        function(bulk) {
-
-            bulk %>%
-                group_by(CHROM) %>%
-                mutate(state =
-                    run_hmm_inhom(
-                        pAD = pAD,
-                        DP = DP,
-                        p_s = p_s,
-                        t = t,
-                        theta_min = theta_min,
-                        gamma = gamma
-                    )
-                ) %>% ungroup() %>%
-                mutate(cnv_state = str_remove(state, '_down|_up')) %>%
-                annot_segs() %>%
-                smooth_segs(min_genes = min_genes) %>%
-                annot_segs()
-
-        }) %>%
-        bind_rows()
+	bulks = define_balanced_regions(splits)
 
     # unionize imbalanced segs
     segs_imbal = bulks %>% 

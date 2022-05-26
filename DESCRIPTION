@@ -16,6 +16,7 @@ Imports:
     dendextend,
     dplyr,
     extraDistr,
+    future.apply,
     GenomicRanges,
     ggplot2,
     ggraph,

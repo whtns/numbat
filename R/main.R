@@ -5,7 +5,7 @@
 #' @import stringr
 #' @import glue
 #' @import tidygraph
-#' @importFrom parallel mclapply
+#' @importFrom future.apply future_lapply
 #' @import ggplot2
 #' @import ggtree
 #' @import ggraph
@@ -565,8 +565,7 @@ make_group_bulks = function(groups, count_mat, df_allele, lambdas_ref, gtf, gene
     ncores = ifelse(is.null(ncores), length(groups), ncores)
     
     
-    results = mclapply(
-    	mc.cores = ncores,
+    results = future.apply::future_lapply(
             groups,
             function(g) {
                 get_bulk(
@@ -633,8 +632,7 @@ run_group_hmms = function(
         find_diploid = TRUE
     }
     
-    results = mclapply(
-    	mc.cores = ncores,
+    results = future.apply::future_lapply(
         bulks %>% split(.$sample),
         function(bulk) {
             bulk %>% analyze_bulk(
@@ -1061,30 +1059,37 @@ get_exp_post = function(segs_consensus, count_mat, gtf, lambdas_ref, sc_refs = N
         sc_refs = choose_ref_cor(count_mat, lambdas_ref, gtf)
     }
     
-    results = mclapply(
-    	mc.cores = ncores,
-        cells,
-        function(cell) {
-
-            ref = sc_refs[cell]
-
-            exp_sc = exp_sc[,c('gene', 'seg', 'CHROM', 'cnv_state', 'seg_start', 'seg_end', cell)] %>%
-                rename(Y_obs = ncol(.))
-
-            exp_sc %>%
-                mutate(
-                    lambda_ref = lambdas_ref[, ref][gene],
-                    lambda_obs = Y_obs/sum(Y_obs),
-                    logFC = log2(lambda_obs/lambda_ref)
-                ) %>%
-                get_exp_likelihoods(
-                    use_loh = use_loh,
-                    diploid_chroms = diploid_chroms
-                ) %>%
-                mutate(cell = cell, ref = ref)
-
-        }
-    )
+    
+    get_exp_sc_results <- function(cells){
+    	p <- progressor(along = cells)
+    	results = future.apply::future_lapply(
+    		cells,
+    		function(cell) {
+    			p(sprintf("cell=%s", cell))
+    			
+    			ref = sc_refs[cell]
+    			
+    			exp_sc = exp_sc[,c('gene', 'seg', 'CHROM', 'cnv_state', 'seg_start', 'seg_end', cell)] %>%
+    				rename(Y_obs = ncol(.))
+    			
+    			exp_sc %>%
+    				mutate(
+    					lambda_ref = lambdas_ref[, ref][gene],
+    					lambda_obs = Y_obs/sum(Y_obs),
+    					logFC = log2(lambda_obs/lambda_ref)
+    				) %>%
+    				get_exp_likelihoods(
+    					use_loh = use_loh,
+    					diploid_chroms = diploid_chroms
+    				) %>%
+    				mutate(cell = cell, ref = ref)
+    			
+    		}
+    	)
+    	
+    }
+    
+    results = get_exp_sc_results(cells)
 
     bad = sapply(results, inherits, what = "try-error")
 

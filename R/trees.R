@@ -147,8 +147,7 @@ nni <- function(tree, ncores = 1) {
   result <- vector("list", 2 * n)
   l <- 1
   
-  result = mclapply(
-  	mc.cores = ncores,
+  result = future.apply::future_lapply(
           seq(1,n),
           function(i) {
                nnin(tree, i)
